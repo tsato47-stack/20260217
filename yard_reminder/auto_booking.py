@@ -12,6 +12,23 @@ LOGIN_URL = "https://yard.hacomono.jp/login"
 INSTRUCTOR = "NAO"
 MAX_RETRIES = 3
 
+# Playwrightが使うChromiumの実行パス候補（環境によって異なる）
+_CHROMIUM_CANDIDATES = [
+    # Linux (Claude Code / CI 環境)
+    "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+    # playwright install chromium で標準インストールされる場所
+    os.path.expanduser("~/.cache/ms-playwright/chromium-1194/chrome-linux/chrome"),
+    os.path.expanduser("~/.cache/ms-playwright/chromium-1223/chrome-linux/chrome"),
+    # Windows (Playwright デフォルト) — Noneにして自動検出させる
+]
+
+
+def _find_chromium() -> str | None:
+    for path in _CHROMIUM_CANDIDATES:
+        if os.path.isfile(path):
+            return path
+    return None  # Playwright のデフォルト検索に任せる
+
 
 def _notify(title: str, message: str) -> None:
     if _PLYER:
@@ -55,8 +72,12 @@ class AutoBooker:
         class_name = entry.get("class_name", "")
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            context = browser.new_context()
+            launch_kwargs = {"headless": False}
+            chrome_path = _find_chromium()
+            if chrome_path:
+                launch_kwargs["executable_path"] = chrome_path
+            browser = p.chromium.launch(**launch_kwargs)
+            context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
 
             try:
